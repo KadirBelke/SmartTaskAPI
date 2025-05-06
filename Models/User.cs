@@ -1,9 +1,21 @@
-public class User
+using System.ComponentModel.DataAnnotations;
+
+namespace SmartTaskAPI.Models
 {
-    public int Id { get; set; }
-    public string Username { get; set; } = string.Empty;
-    public string PasswordHash { get; set; } = string.Empty; // Hash'li şifre saklayacağız
-    public string Role { get; set; } = "User"; 
-    public string RefreshToken { get; set; } = string.Empty;
-    public DateTime RefreshTokenExpiryTime { get; set; }
+    public class User
+    {
+        public enum RoleType
+        {
+            User,
+            Admin
+        }
+        public int Id { get; set; }
+        [Required]
+        public string Username { get; set; } = string.Empty;
+        [Required]
+        public string PasswordHash { get; set; } = string.Empty;
+        public RoleType Role { get; set; } = RoleType.User;
+        public string RefreshToken { get; set; } = string.Empty;
+        public DateTime RefreshTokenExpiryTime { get; set; }
+    }
 }

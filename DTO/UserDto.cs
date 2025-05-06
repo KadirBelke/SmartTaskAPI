@@ -1,10 +1,12 @@
+using static SmartTaskAPI.Models.User;
+
 namespace SmartTaskAPI.Dtos
 {
     public class UserRegisterDto
     {
         public string Username { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
-        public string Role { get; set; } = "User";
+        public RoleType Role { get; set; } = RoleType.User;
     }
 
     public class UserLoginDto
