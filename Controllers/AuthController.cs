@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using SmartTaskAPI.Data;
 using SmartTaskAPI.Models;
+using SmartTaskAPI.Dtos;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -8,7 +9,6 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Cryptography;
-
 
 namespace SmartTaskAPI.Controllers
 {
@@ -26,11 +26,10 @@ namespace SmartTaskAPI.Controllers
         }
 
         [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] UserDto request)
+        public async Task<IActionResult> Register([FromBody] UserRegisterDto request)
         {
             var existingUser = await _context.Users.AnyAsync(u => u.Username == request.Username);
-            if (existingUser)
-                return BadRequest("Username already exists.");
+            if (existingUser) return BadRequest("Username already exists.");
 
             var user = new User
             {
@@ -46,7 +45,7 @@ namespace SmartTaskAPI.Controllers
         }
 
         [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] UserDto request)
+        public async Task<IActionResult> Login([FromBody] UserLoginDto request)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == request.Username);
             if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
@@ -54,42 +53,45 @@ namespace SmartTaskAPI.Controllers
 
             var token = CreateToken(user);
             var refreshToken = GenerateRefreshToken();
+
             user.RefreshToken = refreshToken;
-            user.RefreshTokenExpiryTime = DateTime.Now.AddDays(7); // 7 gün geçerli
+            user.RefreshTokenExpiryTime = DateTime.Now.AddDays(7);
             await _context.SaveChangesAsync();
-            return Ok(new { token,refreshToken });
+
+            return Ok(new { token, refreshToken });
         }
 
         [HttpPost("refresh")]
         public async Task<IActionResult> RefreshToken([FromBody] string refreshToken)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.RefreshToken == refreshToken);
-
             if (user == null || user.RefreshTokenExpiryTime < DateTime.Now)
                 return Unauthorized("Invalid or expired refresh token.");
 
-            var newAccessToken = CreateToken(user);
+            var newToken = CreateToken(user);
             var newRefreshToken = GenerateRefreshToken();
 
             user.RefreshToken = newRefreshToken;
             user.RefreshTokenExpiryTime = DateTime.Now.AddDays(7);
-
             await _context.SaveChangesAsync();
 
-            return Ok(new
-            {
-                token = newAccessToken,
-                refreshToken = newRefreshToken
-            });
+            return Ok(new { token = newToken, refreshToken = newRefreshToken });
         }
 
         [Authorize]
         [HttpGet("me")]
-        public IActionResult GetCurrentUser()
+        public async Task<ActionResult<UserResponseDto>> GetMe()
         {
             var username = User.Identity?.Name;
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+            if (user == null) return NotFound();
 
-            return Ok(new { message = $"Giriş yapan kullanıcı: {username}" });
+            return Ok(new UserResponseDto
+            {
+                Id = user.Id,
+                Username = user.Username,
+                Role = user.Role
+            });
         }
 
         [Authorize]
@@ -97,16 +99,14 @@ namespace SmartTaskAPI.Controllers
         public async Task<IActionResult> Logout()
         {
             var username = User.Identity?.Name;
-
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
             if (user == null) return NotFound();
 
             user.RefreshToken = string.Empty;
             user.RefreshTokenExpiryTime = DateTime.MinValue;
-
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Çıkış başarılı." });
+            return Ok(new { message = "Logged out successfully" });
         }
 
         private string CreateToken(User user)
@@ -118,7 +118,7 @@ namespace SmartTaskAPI.Controllers
                 new Claim(ClaimTypes.Role, user.Role)
             };
 
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key bulunamadı!")));
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var token = new JwtSecurityToken(
@@ -133,15 +133,7 @@ namespace SmartTaskAPI.Controllers
 
         private string GenerateRefreshToken()
         {
-            byte[] randomBytes = RandomNumberGenerator.GetBytes(64);
-            return Convert.ToBase64String(randomBytes);
+            return Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
         }
-    }
-
-    public class UserDto
-    {
-        public string Username { get; set; } = string.Empty;
-        public string Password { get; set; } = string.Empty;
-         public string Role { get; set; } = "User";
     }
 }

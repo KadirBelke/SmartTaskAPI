@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using SmartTaskAPI.Models;
-using SmartTaskAPI.Data;
 using Microsoft.AspNetCore.Authorization;
-
+using SmartTaskAPI.Data;
+using SmartTaskAPI.Models;
+using SmartTaskAPI.Dtos;
 
 namespace SmartTaskAPI.Controllers
 {
@@ -19,78 +19,83 @@ namespace SmartTaskAPI.Controllers
             _context = context;
         }
 
-        // GET: api/taskitems
         [HttpGet]
-        public ActionResult<IEnumerable<TaskItem>> GetAll()
+        public async Task<ActionResult<IEnumerable<TaskItemResponseDto>>> GetAll()
         {
-            return Ok(_context.TaskItems.ToList());
-        }
-
-        // GET: api/taskitems/5
-        [HttpGet("{id}")]
-        public async Task<ActionResult<TaskItem>> GetTaskItem(int id)
-        {
-            var taskItem = await _context.TaskItems.FindAsync(id);
-
-            if (taskItem == null)
+            var tasks = await _context.TaskItems.ToListAsync();
+            var result = tasks.Select(t => new TaskItemResponseDto
             {
-                return NotFound();
-            }
+                Id = t.Id,
+                Title = t.Title,
+                Description = t.Description,
+                IsCompleted = t.IsCompleted
+            });
 
-            return taskItem;
+            return Ok(result);
         }
 
-        // POST: api/taskitems
-        [HttpPost]
-        public async Task<ActionResult<TaskItem>> CreateTaskItem(TaskItem taskItem)
+        [HttpGet("{id}")]
+        public async Task<ActionResult<TaskItemResponseDto>> GetById(int id)
         {
-            _context.TaskItems.Add(taskItem);
+            var task = await _context.TaskItems.FindAsync(id);
+            if (task == null) return NotFound();
+
+            var result = new TaskItemResponseDto
+            {
+                Id = task.Id,
+                Title = task.Title,
+                Description = task.Description,
+                IsCompleted = task.IsCompleted
+            };
+
+            return Ok(result);
+        }
+
+        [HttpPost]
+        public async Task<ActionResult<TaskItemResponseDto>> Create(TaskItemCreateDto dto)
+        {
+            var task = new TaskItem
+            {
+                Title = dto.Title,
+                Description = dto.Description,
+                IsCompleted = dto.IsCompleted
+            };
+
+            _context.TaskItems.Add(task);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetTaskItem), new { id = taskItem.Id }, taskItem);
+            var response = new TaskItemResponseDto
+            {
+                Id = task.Id,
+                Title = task.Title,
+                Description = task.Description,
+                IsCompleted = task.IsCompleted
+            };
+
+            return CreatedAtAction(nameof(GetById), new { id = task.Id }, response);
         }
 
-        // PUT: api/taskitems/5
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateTaskItem(int id, TaskItem taskItem)
+        public async Task<IActionResult> Update(int id, [FromBody] TaskItemUpdateDto dto)
         {
-            if (id != taskItem.Id)
-            {
-                return BadRequest();
-            }
+            var taskItem = await _context.TaskItems.FindAsync(id);
+            if (taskItem == null) return NotFound();
 
-            _context.Entry(taskItem).State = EntityState.Modified;
+            taskItem.Title = dto.Title;
+            taskItem.Description = dto.Description;
+            taskItem.IsCompleted = dto.IsCompleted;
 
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!_context.TaskItems.Any(e => e.Id == id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
-
+            await _context.SaveChangesAsync();
             return NoContent();
         }
 
-        // DELETE: api/taskitems/5
         [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteTaskItem(int id)
+        public async Task<IActionResult> Delete(int id)
         {
-            var taskItem = await _context.TaskItems.FindAsync(id);
-            if (taskItem == null)
-            {
-                return NotFound();
-            }
+            var task = await _context.TaskItems.FindAsync(id);
+            if (task == null) return NotFound();
 
-            _context.TaskItems.Remove(taskItem);
+            _context.TaskItems.Remove(task);
             await _context.SaveChangesAsync();
 
             return NoContent();
