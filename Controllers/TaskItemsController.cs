@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using SmartTaskAPI.Data;
 using SmartTaskAPI.Models;
 using SmartTaskAPI.Dtos;
+using System.Security.Claims;
 
 namespace SmartTaskAPI.Controllers
 {
@@ -19,71 +20,94 @@ namespace SmartTaskAPI.Controllers
             _context = context;
         }
 
+        private int GetCurrentUserId()
+        {
+            return int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        }
+
+        private bool IsAdmin()
+        {
+            return User.IsInRole("Admin");
+        }
+
         [HttpGet]
         public async Task<ActionResult<IEnumerable<TaskItemResponseDto>>> GetAll()
         {
-            var tasks = await _context.TaskItems.ToListAsync();
-            var result = tasks.Select(t => new TaskItemResponseDto
-            {
-                Id = t.Id,
-                Title = t.Title,
-                Description = t.Description,
-                IsCompleted = t.IsCompleted
-            });
+            var userId = GetCurrentUserId();
 
-            return Ok(result);
+            var tasks = await _context.TaskItems
+                .Include(t => t.User)
+                .Where(t => IsAdmin() || t.UserId == userId)
+                .Select(t => new TaskItemResponseDto
+                {
+                    Id = t.Id,
+                    Title = t.Title,
+                    Description = t.Description,
+                    IsCompleted = t.IsCompleted,
+                    Username = t.User.Username
+                })
+                .ToListAsync();
+
+            return Ok(tasks);
         }
 
         [HttpGet("{id}")]
         public async Task<ActionResult<TaskItemResponseDto>> GetById(int id)
         {
-            var task = await _context.TaskItems.FindAsync(id);
-            if (task == null) return NotFound();
+            var task = await _context.TaskItems
+                .Include(t => t.User)
+                .FirstOrDefaultAsync(t => t.Id == id);
 
-            var result = new TaskItemResponseDto
+            if (task == null || (!IsAdmin() && task.UserId != GetCurrentUserId()))
+                return NotFound();
+
+            return new TaskItemResponseDto
             {
                 Id = task.Id,
                 Title = task.Title,
                 Description = task.Description,
-                IsCompleted = task.IsCompleted
+                IsCompleted = task.IsCompleted,
+                Username = task.User.Username
             };
-
-            return Ok(result);
         }
 
         [HttpPost]
         public async Task<ActionResult<TaskItemResponseDto>> Create(TaskItemCreateDto dto)
         {
+            var userId = GetCurrentUserId();
+
             var task = new TaskItem
             {
                 Title = dto.Title,
                 Description = dto.Description,
-                IsCompleted = dto.IsCompleted
+                IsCompleted = dto.IsCompleted,
+                UserId = userId
             };
 
             _context.TaskItems.Add(task);
             await _context.SaveChangesAsync();
 
-            var response = new TaskItemResponseDto
+            return CreatedAtAction(nameof(GetById), new { id = task.Id }, new TaskItemResponseDto
             {
                 Id = task.Id,
                 Title = task.Title,
                 Description = task.Description,
-                IsCompleted = task.IsCompleted
-            };
-
-            return CreatedAtAction(nameof(GetById), new { id = task.Id }, response);
+                IsCompleted = task.IsCompleted,
+                Username = User.Identity?.Name!
+            });
         }
-
+        
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, [FromBody] TaskItemUpdateDto dto)
+        public async Task<IActionResult> Update(int id, TaskItemUpdateDto dto)
         {
-            var taskItem = await _context.TaskItems.FindAsync(id);
-            if (taskItem == null) return NotFound();
+            var task = await _context.TaskItems.FindAsync(id);
 
-            taskItem.Title = dto.Title;
-            taskItem.Description = dto.Description;
-            taskItem.IsCompleted = dto.IsCompleted;
+            if (task == null || (!IsAdmin() && task.UserId != GetCurrentUserId()))
+                return NotFound();
+
+            task.Title = dto.Title;
+            task.Description = dto.Description;
+            task.IsCompleted = dto.IsCompleted;
 
             await _context.SaveChangesAsync();
             return NoContent();
@@ -93,7 +117,9 @@ namespace SmartTaskAPI.Controllers
         public async Task<IActionResult> Delete(int id)
         {
             var task = await _context.TaskItems.FindAsync(id);
-            if (task == null) return NotFound();
+
+            if (task == null || (!IsAdmin() && task.UserId != GetCurrentUserId()))
+                return NotFound();
 
             _context.TaskItems.Remove(task);
             await _context.SaveChangesAsync();

@@ -16,7 +16,7 @@ namespace SmartTaskAPI.Data
         {
             modelBuilder.Entity<User>()
                 .Property(u => u.Role)
-                .HasConversion<string>(); // 💥 Enum'ları string olarak sakla
+                .HasConversion<string>();
         }
     }
 }

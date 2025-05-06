@@ -4,11 +4,7 @@ namespace SmartTaskAPI.Models
 {
     public class User
     {
-        public enum RoleType
-        {
-            User,
-            Admin
-        }
+        public enum RoleType { User, Admin }
         public int Id { get; set; }
         [Required]
         public string Username { get; set; } = string.Empty;
@@ -17,5 +13,7 @@ namespace SmartTaskAPI.Models
         public RoleType Role { get; set; } = RoleType.User;
         public string RefreshToken { get; set; } = string.Empty;
         public DateTime RefreshTokenExpiryTime { get; set; }
+        public List<TaskItem> TaskItems { get; set; } = new();
+
     }
 }
