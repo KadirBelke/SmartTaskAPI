@@ -7,6 +7,8 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authorization;
+using System.Security.Cryptography;
+
 
 namespace SmartTaskAPI.Controllers
 {
@@ -51,7 +53,34 @@ namespace SmartTaskAPI.Controllers
                 return Unauthorized("Invalid username or password.");
 
             var token = CreateToken(user);
-            return Ok(new { token });
+            var refreshToken = GenerateRefreshToken();
+            user.RefreshToken = refreshToken;
+            user.RefreshTokenExpiryTime = DateTime.Now.AddDays(7); // 7 gün geçerli
+            await _context.SaveChangesAsync();
+            return Ok(new { token,refreshToken });
+        }
+
+        [HttpPost("refresh")]
+        public async Task<IActionResult> RefreshToken([FromBody] string refreshToken)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.RefreshToken == refreshToken);
+
+            if (user == null || user.RefreshTokenExpiryTime < DateTime.Now)
+                return Unauthorized("Invalid or expired refresh token.");
+
+            var newAccessToken = CreateToken(user);
+            var newRefreshToken = GenerateRefreshToken();
+
+            user.RefreshToken = newRefreshToken;
+            user.RefreshTokenExpiryTime = DateTime.Now.AddDays(7);
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                token = newAccessToken,
+                refreshToken = newRefreshToken
+            });
         }
 
         [Authorize]
@@ -83,6 +112,12 @@ namespace SmartTaskAPI.Controllers
                 signingCredentials: creds);
 
             return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        private string GenerateRefreshToken()
+        {
+            byte[] randomBytes = RandomNumberGenerator.GetBytes(64);
+            return Convert.ToBase64String(randomBytes);
         }
     }
 
