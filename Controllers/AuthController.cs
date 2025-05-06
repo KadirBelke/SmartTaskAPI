@@ -92,6 +92,23 @@ namespace SmartTaskAPI.Controllers
             return Ok(new { message = $"Giriş yapan kullanıcı: {username}" });
         }
 
+        [Authorize]
+        [HttpPost("logout")]
+        public async Task<IActionResult> Logout()
+        {
+            var username = User.Identity?.Name;
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+            if (user == null) return NotFound();
+
+            user.RefreshToken = string.Empty;
+            user.RefreshTokenExpiryTime = DateTime.MinValue;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Çıkış başarılı." });
+        }
+
         private string CreateToken(User user)
         {
             var claims = new List<Claim>
