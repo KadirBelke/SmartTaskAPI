@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.AspNetCore.Authorization;
 
 namespace SmartTaskAPI.Controllers
 {
@@ -50,6 +51,15 @@ namespace SmartTaskAPI.Controllers
 
             var token = CreateToken(user);
             return Ok(new { token });
+        }
+
+        [Authorize]
+        [HttpGet("me")]
+        public IActionResult GetCurrentUser()
+        {
+            var username = User.Identity?.Name;
+
+            return Ok(new { message = $"Giriş yapan kullanıcı: {username}" });
         }
 
         private string CreateToken(User user)

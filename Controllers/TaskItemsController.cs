@@ -2,9 +2,12 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartTaskAPI.Models;
 using SmartTaskAPI.Data;
+using Microsoft.AspNetCore.Authorization;
+
 
 namespace SmartTaskAPI.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class TaskItemsController : ControllerBase
