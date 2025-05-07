@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using FluentValidation;
+using FluentValidation.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -61,6 +63,10 @@ builder.Services.AddAuthentication(options =>
             builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key bulunamadı!")))
     };
 });
+
+builder.Services.AddFluentValidationAutoValidation()
+                .AddFluentValidationClientsideAdapters()
+                .AddValidatorsFromAssemblyContaining<Program>();
 
 var app = builder.Build();
 
