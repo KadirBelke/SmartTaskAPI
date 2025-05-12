@@ -37,6 +37,8 @@ namespace SmartTaskAPI.Controllers
 
             var tasksQuery = _context.TaskItems
                 .Include(t => t.User)
+                .Include(t => t.TaskItemTags)
+                    .ThenInclude(tt => tt.Tag)
                 .AsQueryable();
 
             if (!IsAdmin())
@@ -48,11 +50,14 @@ namespace SmartTaskAPI.Controllers
             if (!string.IsNullOrWhiteSpace(query.Title))
                 tasksQuery = tasksQuery.Where(t => t.Title.Contains(query.Title));
 
+            if (!string.IsNullOrWhiteSpace(query.Tag))
+                tasksQuery = tasksQuery.Where(t => t.TaskItemTags.Any(tt => tt.Tag.Name == query.Tag));
+
             var totalCount = await tasksQuery.CountAsync();
             var totalPages = (int)Math.Ceiling(totalCount / (double)query.PageSize);
 
             var tasks = await tasksQuery
-                .OrderByDescending(t => t.Id) // İsteğe göre CreatedAt de olabilir
+                .OrderByDescending(t => t.Id)
                 .Skip((query.Page - 1) * query.PageSize)
                 .Take(query.PageSize)
                 .Select(t => new TaskItemResponseDto
@@ -61,7 +66,8 @@ namespace SmartTaskAPI.Controllers
                     Title = t.Title,
                     Description = t.Description,
                     IsCompleted = t.IsCompleted,
-                    Username = t.User.Username
+                    Username = t.User.Username,
+                    Tags = t.TaskItemTags.Select(tt => tt.Tag.Name).ToList()
                 })
                 .ToListAsync();
 
@@ -94,7 +100,8 @@ namespace SmartTaskAPI.Controllers
                 Title = task.Title,
                 Description = task.Description,
                 IsCompleted = task.IsCompleted,
-                Username = task.User.Username
+                Username = task.User.Username,
+                Tags = task.TaskItemTags.Select(tt => tt.Tag.Name).ToList()
             };
         }
 
@@ -103,41 +110,88 @@ namespace SmartTaskAPI.Controllers
         {
             var userId = GetCurrentUserId();
 
-            var task = new TaskItem
+            var taskItem = new TaskItem
             {
                 Title = dto.Title,
                 Description = dto.Description,
                 IsCompleted = dto.IsCompleted,
-                UserId = userId
+                UserId = userId,
             };
 
-            _context.TaskItems.Add(task);
+            if (dto.Tags != null)
+            {
+                foreach (var tagName in dto.Tags.Distinct())
+                {
+                    var tag = await _context.Tags
+                            .FirstOrDefaultAsync(t => t.Name.ToLower() == tagName.ToLower())
+                            ?? new Tag { Name = tagName };
+
+                    taskItem.TaskItemTags.Add(new TaskItemTag { Tag = tag });
+                }
+            }
+
+            _context.TaskItems.Add(taskItem);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetById), new { id = task.Id }, new TaskItemResponseDto
+            var response = new TaskItemResponseDto
             {
-                Id = task.Id,
-                Title = task.Title,
-                Description = task.Description,
-                IsCompleted = task.IsCompleted,
-                Username = User.Identity?.Name!
-            });
+                Id = taskItem.Id,
+                Title = taskItem.Title,
+                Description = taskItem.Description,
+                IsCompleted = taskItem.IsCompleted,
+                Username = User.Identity?.Name ?? "unknown",
+                Tags = taskItem.TaskItemTags.Select(tt => tt.Tag.Name).ToList()
+            };
+
+            return CreatedAtAction(nameof(GetById), new { id = taskItem.Id }, response);
         }
         
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, TaskItemUpdateDto dto)
+        public async Task<ActionResult> Update(int id, TaskItemUpdateDto dto)
         {
-            var task = await _context.TaskItems.FindAsync(id);
+            var task = await _context.TaskItems
+                .Include(t => t.TaskItemTags)
+                .ThenInclude(tt => tt.Tag)
+                .FirstOrDefaultAsync(t => t.Id == id);
 
-            if (task == null || (!IsAdmin() && task.UserId != GetCurrentUserId()))
+            if (task == null)
                 return NotFound();
+
+            if (!IsAdmin() && task.UserId != GetCurrentUserId())
+                return Forbid();
 
             task.Title = dto.Title;
             task.Description = dto.Description;
             task.IsCompleted = dto.IsCompleted;
 
+            // Etiketleri güncelle
+            task.TaskItemTags.Clear();
+
+            if (dto.Tags != null)
+            {
+                foreach (var tagName in dto.Tags.Distinct())
+                {
+                    var tag = await _context.Tags
+                        .FirstOrDefaultAsync(t => t.Name.ToLower() == tagName.ToLower())
+                        ?? new Tag { Name = tagName };
+
+
+                    task.TaskItemTags.Add(new TaskItemTag { Tag = tag });
+                }
+            }
+
             await _context.SaveChangesAsync();
-            return NoContent();
+              var response = new TaskItemResponseDto
+            {
+                Id = task.Id,
+                Title = task.Title,
+                Description = task.Description,
+                IsCompleted = task.IsCompleted,
+                Username = User.Identity?.Name ?? "unknown",
+                Tags = task.TaskItemTags.Select(tt => tt.Tag.Name).ToList()
+            };
+
+            return CreatedAtAction(nameof(GetById), new { id = task.Id }, response);
         }
 
         [HttpDelete("{id}")]
@@ -153,5 +207,64 @@ namespace SmartTaskAPI.Controllers
 
             return NoContent();
         }
+
+        [HttpGet("tags")]
+        public async Task<ActionResult<List<string>>> GetAllTags()
+        {
+            var userId = GetCurrentUserId();
+
+            var tagsQuery = _context.Tags
+                .Include(t => t.TaskItemTags)
+                .ThenInclude(tt => tt.TaskItem)
+                .AsQueryable();
+
+            if (!IsAdmin())
+            {
+                tagsQuery = tagsQuery
+                    .Where(t => t.TaskItemTags
+                        .Any(tt => tt.TaskItem.UserId == userId));
+            }
+
+            var tags = await tagsQuery
+                .Select(t => t.Name)
+                .Distinct()
+                .OrderBy(name => name)
+                .ToListAsync();
+
+            return Ok(tags);
+        }
+
+
+        [HttpGet("tags/stats")]
+        public async Task<ActionResult> GetTagStats()
+        {
+            var userId = GetCurrentUserId();
+
+            var tagsQuery = _context.Tags
+                .Include(t => t.TaskItemTags)
+                    .ThenInclude(tt => tt.TaskItem)
+                .AsQueryable();
+
+            if (!IsAdmin())
+            {
+                tagsQuery = tagsQuery
+                    .Where(t => t.TaskItemTags
+                        .Any(tt => tt.TaskItem.UserId == userId));
+            }
+
+            var stats = await tagsQuery
+                .Select(tag => new
+                {
+                    Tag = tag.Name,
+                    Count = tag.TaskItemTags
+                        .Count(tt => tt.TaskItem.UserId == userId || IsAdmin())
+                })
+                .OrderByDescending(t => t.Count)
+                .ToListAsync();
+
+            return Ok(stats);
+        }
+
+
     }
 }

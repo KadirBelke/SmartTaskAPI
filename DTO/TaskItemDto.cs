@@ -5,6 +5,8 @@ namespace SmartTaskAPI.Dtos
         public string Title { get; set; } = string.Empty;
         public string? Description { get; set; } = string.Empty;
         public bool IsCompleted { get; set; } = false;
+        public List<string>? Tags { get; set; }
+
     }
 
     public class TaskItemUpdateDto
@@ -12,6 +14,8 @@ namespace SmartTaskAPI.Dtos
         public string Title { get; set; } = string.Empty;
         public string? Description { get; set; } = string.Empty;
         public bool IsCompleted { get; set; }
+        public List<string>? Tags { get; set; }
+
     }
 
     public class TaskItemResponseDto
@@ -21,6 +25,9 @@ namespace SmartTaskAPI.Dtos
         public string? Description { get; set; } = string.Empty;
         public bool IsCompleted { get; set; }
         public string Username { get; set; } = string.Empty;
+
+        public List<string> Tags { get; set; } = new();
+
     }
 
     public class TaskItemQueryDto
@@ -29,6 +36,7 @@ namespace SmartTaskAPI.Dtos
         public string? Title { get; set; }
         public int Page { get; set; } = 1;
         public int PageSize { get; set; } = 10;
+        public string? Tag { get; set; }
     }
 
     public class PaginatedResponse<T>
