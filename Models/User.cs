@@ -11,8 +11,6 @@ namespace SmartTaskAPI.Models
         [Required]
         public string PasswordHash { get; set; } = string.Empty;
         public RoleType Role { get; set; } = RoleType.User;
-        public string RefreshToken { get; set; } = string.Empty;
-        public DateTime RefreshTokenExpiryTime { get; set; }
         public List<TaskItem> TaskItems { get; set; } = new();
 
     }

@@ -18,11 +18,13 @@ namespace SmartTaskAPI.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IConfiguration _configuration;
+        private readonly RedisService _redisService;
 
-        public AuthController(AppDbContext context, IConfiguration configuration)
+        public AuthController(AppDbContext context, IConfiguration configuration, RedisService redisService)
         {
             _context = context;
             _configuration = configuration;
+            _redisService = redisService;
         }
 
         [HttpPost("register")]
@@ -54,28 +56,33 @@ namespace SmartTaskAPI.Controllers
             var token = CreateToken(user);
             var refreshToken = GenerateRefreshToken();
 
-            user.RefreshToken = refreshToken;
-            user.RefreshTokenExpiryTime = DateTime.Now.AddDays(7);
-            await _context.SaveChangesAsync();
+            await _redisService.SetRefreshTokenAsync(user.Id, refreshToken, TimeSpan.FromDays(7));
 
             return Ok(new { token, refreshToken });
         }
 
+        [Authorize]
         [HttpPost("refresh")]
         public async Task<IActionResult> RefreshToken([FromBody] string refreshToken)
         {
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.RefreshToken == refreshToken);
-            if (user == null || user.RefreshTokenExpiryTime < DateTime.Now)
-                return Unauthorized("Invalid or expired refresh token.");
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null)
+                return Unauthorized("Unauthorized");
 
-            var newToken = CreateToken(user);
+            int userId = int.Parse(userIdClaim);
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null) return Unauthorized("User not found");
+
+            var storedToken = await _redisService.GetRefreshTokenAsync(userId);
+            if (storedToken == null || storedToken != refreshToken)
+                return Unauthorized("Invalid or expired refresh token");
+
+            var newAccessToken = CreateToken(user);
             var newRefreshToken = GenerateRefreshToken();
 
-            user.RefreshToken = newRefreshToken;
-            user.RefreshTokenExpiryTime = DateTime.Now.AddDays(7);
-            await _context.SaveChangesAsync();
+            await _redisService.SetRefreshTokenAsync(user.Id, newRefreshToken, TimeSpan.FromDays(7));
 
-            return Ok(new { token = newToken, refreshToken = newRefreshToken });
+            return Ok(new { token = newAccessToken, refreshToken = newRefreshToken });
         }
 
         [Authorize]
@@ -98,13 +105,13 @@ namespace SmartTaskAPI.Controllers
         [HttpPost("logout")]
         public async Task<IActionResult> Logout()
         {
-            var username = User.Identity?.Name;
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
-            if (user == null) return NotFound();
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null) return Unauthorized();
 
-            user.RefreshToken = string.Empty;
-            user.RefreshTokenExpiryTime = DateTime.MinValue;
-            await _context.SaveChangesAsync();
+            int userId = int.Parse(userIdClaim);
+
+            // Refresh token'ı Redis'ten sil
+            await _redisService.SetRefreshTokenAsync(userId, "", TimeSpan.Zero);
 
             return Ok(new { message = "Logged out successfully" });
         }
