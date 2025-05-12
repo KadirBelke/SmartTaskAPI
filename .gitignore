@@ -1,0 +1,33 @@
+# === Build outputs ===
+bin/
+obj/
+
+# === User/IDE specific files ===
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vscode/
+.idea/
+
+# === HTTP request test files (used by Visual Studio's REST Client) ===
+*.http
+
+# === Test result and code coverage directories ===
+TestResults/
+*.coverage
+*.coveragexml
+coverage/
+
+# === Package/cache folders (NuGet, tools etc.) ===
+*.nupkg
+.nuget/
+
+# === IDE-specific project metadata (Visual Studio / JetBrains Rider) ===
+*.sln.iml
+_ReSharper*/
+*.[Rr]e[Ss]harper
+.vs/
+
+# === Miscellaneous logs ===
+*.log
