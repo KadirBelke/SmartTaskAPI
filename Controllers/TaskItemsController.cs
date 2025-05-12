@@ -30,14 +30,31 @@ namespace SmartTaskAPI.Controllers
             return User.IsInRole("Admin");
         }
 
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<TaskItemResponseDto>>> GetAll()
+       [HttpGet]
+        public async Task<ActionResult<PaginatedResponse<TaskItemResponseDto>>> GetAll([FromQuery] TaskItemQueryDto query)
         {
             var userId = GetCurrentUserId();
 
-            var tasks = await _context.TaskItems
+            var tasksQuery = _context.TaskItems
                 .Include(t => t.User)
-                .Where(t => IsAdmin() || t.UserId == userId)
+                .AsQueryable();
+
+            if (!IsAdmin())
+                tasksQuery = tasksQuery.Where(t => t.UserId == userId);
+
+            if (query.IsCompleted.HasValue)
+                tasksQuery = tasksQuery.Where(t => t.IsCompleted == query.IsCompleted);
+
+            if (!string.IsNullOrWhiteSpace(query.Title))
+                tasksQuery = tasksQuery.Where(t => t.Title.Contains(query.Title));
+
+            var totalCount = await tasksQuery.CountAsync();
+            var totalPages = (int)Math.Ceiling(totalCount / (double)query.PageSize);
+
+            var tasks = await tasksQuery
+                .OrderByDescending(t => t.Id) // İsteğe göre CreatedAt de olabilir
+                .Skip((query.Page - 1) * query.PageSize)
+                .Take(query.PageSize)
                 .Select(t => new TaskItemResponseDto
                 {
                     Id = t.Id,
@@ -48,8 +65,18 @@ namespace SmartTaskAPI.Controllers
                 })
                 .ToListAsync();
 
-            return Ok(tasks);
+            var response = new PaginatedResponse<TaskItemResponseDto>
+            {
+                CurrentPage = query.Page,
+                TotalPages = totalPages,
+                PageSize = query.PageSize,
+                TotalCount = totalCount,
+                Items = tasks
+            };
+
+            return Ok(response);
         }
+
 
         [HttpGet("{id}")]
         public async Task<ActionResult<TaskItemResponseDto>> GetById(int id)
