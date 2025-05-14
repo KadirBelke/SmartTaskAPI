@@ -8,6 +8,20 @@ using FluentValidation.AspNetCore;
 using Hangfire;
 using Hangfire.SqlServer;
 using SmartTaskAPI.Jobs;
+using Serilog;
+using Serilog.Sinks.Elasticsearch;
+
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .WriteTo.Console()
+    .WriteTo.File("logs/log-.txt", rollingInterval: RollingInterval.Day)
+    .WriteTo.Elasticsearch(new ElasticsearchSinkOptions(new Uri("http://localhost:9200"))
+    {
+        AutoRegisterTemplate = true,
+        IndexFormat = "smarttaskapi-logs-{0:yyyy.MM.dd}"
+    })
+    .CreateLogger();
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -80,6 +94,9 @@ builder.Services.AddHangfire(config =>
           .UseSqlServerStorage(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddHangfireServer();
+
+builder.Host.UseSerilog();
+
 
 var app = builder.Build();
 

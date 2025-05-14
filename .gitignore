@@ -31,3 +31,4 @@ _ReSharper*/
 
 # === Miscellaneous logs ===
 *.log
+logs/

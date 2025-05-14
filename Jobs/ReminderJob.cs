@@ -1,15 +1,18 @@
 using SmartTaskAPI.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace SmartTaskAPI.Jobs
 {
     public class ReminderJob
     {
         private readonly AppDbContext _context;
+        private readonly ILogger<ReminderJob> _logger;
 
-        public ReminderJob(AppDbContext context)
+        public ReminderJob(AppDbContext context, ILogger<ReminderJob> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
         public async Task SendRemindersAsync()
@@ -25,8 +28,9 @@ namespace SmartTaskAPI.Jobs
 
             foreach (var task in dueTasks)
             {
-                // At the moment we are only writing logs, e-mail, socket etc. can be added in the future
-                Console.WriteLine($"🔔 Reminder: \"{task.Title}\" is due! [#{task.Id}] at {task.ReminderTime}");
+                _logger.LogInformation("🔔 Reminder triggered for task {@TaskId} at {ReminderTime}",
+                    task.Id,
+                    task.ReminderTime);
             }
         }
     }
