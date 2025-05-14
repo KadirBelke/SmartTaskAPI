@@ -110,7 +110,6 @@ namespace SmartTaskAPI.Controllers
 
             int userId = int.Parse(userIdClaim);
 
-            // Refresh token'ı Redis'ten sil
             await _redisService.SetRefreshTokenAsync(userId, "", TimeSpan.Zero);
 
             return Ok(new { message = "Logged out successfully" });

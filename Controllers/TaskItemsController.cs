@@ -53,6 +53,14 @@ namespace SmartTaskAPI.Controllers
             if (!string.IsNullOrWhiteSpace(query.Tag))
                 tasksQuery = tasksQuery.Where(t => t.TaskItemTags.Any(tt => tt.Tag.Name == query.Tag));
 
+            if (query.ReminderDue == true)
+            {
+                var now = DateTime.Now;
+                tasksQuery = tasksQuery
+                    .Where(t => t.ReminderTime.HasValue && t.ReminderTime <= now);
+            }
+
+
             var totalCount = await tasksQuery.CountAsync();
             var totalPages = (int)Math.Ceiling(totalCount / (double)query.PageSize);
 
@@ -67,7 +75,9 @@ namespace SmartTaskAPI.Controllers
                     Description = t.Description,
                     IsCompleted = t.IsCompleted,
                     Username = t.User.Username,
-                    Tags = t.TaskItemTags.Select(tt => tt.Tag.Name).ToList()
+                    Tags = t.TaskItemTags.Select(tt => tt.Tag.Name).ToList(),
+                    DueDate = t.DueDate,
+                    ReminderTime = t.ReminderTime
                 })
                 .ToListAsync();
 
@@ -82,7 +92,6 @@ namespace SmartTaskAPI.Controllers
 
             return Ok(response);
         }
-
 
         [HttpGet("{id}")]
         public async Task<ActionResult<TaskItemResponseDto>> GetById(int id)
@@ -101,7 +110,9 @@ namespace SmartTaskAPI.Controllers
                 Description = task.Description,
                 IsCompleted = task.IsCompleted,
                 Username = task.User.Username,
-                Tags = task.TaskItemTags.Select(tt => tt.Tag.Name).ToList()
+                Tags = task.TaskItemTags.Select(tt => tt.Tag.Name).ToList(),
+                DueDate = task.DueDate,
+                ReminderTime = task.ReminderTime
             };
         }
 
@@ -116,6 +127,8 @@ namespace SmartTaskAPI.Controllers
                 Description = dto.Description,
                 IsCompleted = dto.IsCompleted,
                 UserId = userId,
+                DueDate = dto.DueDate,
+                ReminderTime = dto.ReminderTime
             };
 
             if (dto.Tags != null)
@@ -163,8 +176,8 @@ namespace SmartTaskAPI.Controllers
             task.Title = dto.Title;
             task.Description = dto.Description;
             task.IsCompleted = dto.IsCompleted;
-
-            // Etiketleri güncelle
+            task.DueDate = dto.DueDate;
+            task.ReminderTime = dto.ReminderTime;
             task.TaskItemTags.Clear();
 
             if (dto.Tags != null)
