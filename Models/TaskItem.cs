@@ -10,6 +10,8 @@ namespace SmartTaskAPI.Models
         public int UserId { get; set; }
         public User? User { get; set; }
         public ICollection<TaskItemTag> TaskItemTags { get; set; } = new List<TaskItemTag>();
+        public bool IsDeleted { get; set; } = false;
+
 
     }
 }

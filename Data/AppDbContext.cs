@@ -33,6 +33,8 @@ namespace SmartTaskAPI.Data
                 .HasOne(tt => tt.Tag)
                 .WithMany(t => t.TaskItemTags)
                 .HasForeignKey(tt => tt.TagId);
+
+            modelBuilder.Entity<TaskItem>().HasQueryFilter(t => !t.IsDeleted);
         }
     }
 }

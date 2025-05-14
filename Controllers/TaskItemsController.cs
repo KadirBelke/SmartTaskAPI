@@ -202,7 +202,7 @@ namespace SmartTaskAPI.Controllers
             if (task == null || (!IsAdmin() && task.UserId != GetCurrentUserId()))
                 return NotFound();
 
-            _context.TaskItems.Remove(task);
+            task.IsDeleted = true; 
             await _context.SaveChangesAsync();
 
             return NoContent();
