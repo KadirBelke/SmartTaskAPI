@@ -153,7 +153,9 @@ namespace SmartTaskAPI.Controllers
                 Description = taskItem.Description,
                 IsCompleted = taskItem.IsCompleted,
                 Username = User.Identity?.Name ?? "unknown",
-                Tags = taskItem.TaskItemTags.Select(tt => tt.Tag.Name).ToList()
+                Tags = taskItem.TaskItemTags.Select(tt => tt.Tag.Name).ToList(),
+                DueDate = taskItem.DueDate,
+                ReminderTime = taskItem.ReminderTime
             };
 
             return CreatedAtAction(nameof(GetById), new { id = taskItem.Id }, response);

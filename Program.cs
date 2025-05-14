@@ -5,7 +5,9 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using FluentValidation;
 using FluentValidation.AspNetCore;
-
+using Hangfire;
+using Hangfire.SqlServer;
+using SmartTaskAPI.Jobs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -71,6 +73,14 @@ builder.Services.AddFluentValidationAutoValidation()
 
 builder.Services.AddSingleton<RedisService>();
 
+builder.Services.AddHangfire(config =>
+    config.SetDataCompatibilityLevel(CompatibilityLevel.Version_170)
+          .UseSimpleAssemblyNameTypeSerializer()
+          .UseRecommendedSerializerSettings()
+          .UseSqlServerStorage(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddHangfireServer();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -78,11 +88,17 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+    app.UseHangfireDashboard("/hangfire");
 }
 
 app.UseHttpsRedirection();
 app.UseAuthentication(); // JWT Authentication middleware
 app.UseAuthorization();
 app.MapControllers();
+
+RecurringJob.AddOrUpdate<ReminderJob>(
+    "reminder-job",
+    job => job.SendRemindersAsync(),
+    Cron.Hourly); 
 
 app.Run();
