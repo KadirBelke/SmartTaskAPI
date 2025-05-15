@@ -10,6 +10,7 @@ using Hangfire.SqlServer;
 using SmartTaskAPI.Jobs;
 using Serilog;
 using Serilog.Sinks.Elasticsearch;
+using SmartTaskAPI.Services;
 
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
@@ -96,7 +97,7 @@ builder.Services.AddHangfire(config =>
 builder.Services.AddHangfireServer();
 
 builder.Host.UseSerilog();
-
+builder.Services.AddScoped<ActivityLogger>();
 
 var app = builder.Build();
 

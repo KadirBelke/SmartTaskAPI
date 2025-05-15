@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using SmartTaskAPI.Data;
 using SmartTaskAPI.Models;
 using SmartTaskAPI.Dtos;
+using SmartTaskAPI.Services;
 using System.Security.Claims;
 
 namespace SmartTaskAPI.Controllers
@@ -14,10 +15,12 @@ namespace SmartTaskAPI.Controllers
     public class TaskItemsController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly ActivityLogger _activityLogger;
 
-        public TaskItemsController(AppDbContext context)
+        public TaskItemsController(AppDbContext context, ActivityLogger activityLogger)
         {
             _context = context;
+            _activityLogger = activityLogger;
         }
 
         private int GetCurrentUserId()
@@ -30,7 +33,7 @@ namespace SmartTaskAPI.Controllers
             return User.IsInRole("Admin");
         }
 
-       [HttpGet]
+        [HttpGet]
         public async Task<ActionResult<PaginatedResponse<TaskItemResponseDto>>> GetAll([FromQuery] TaskItemQueryDto query)
         {
             var userId = GetCurrentUserId();
@@ -59,7 +62,6 @@ namespace SmartTaskAPI.Controllers
                 tasksQuery = tasksQuery
                     .Where(t => t.ReminderTime.HasValue && t.ReminderTime <= now);
             }
-
 
             var totalCount = await tasksQuery.CountAsync();
             var totalPages = (int)Math.Ceiling(totalCount / (double)query.PageSize);
@@ -146,6 +148,8 @@ namespace SmartTaskAPI.Controllers
             _context.TaskItems.Add(taskItem);
             await _context.SaveChangesAsync();
 
+            _activityLogger.Log(userId, User.Identity?.Name ?? "unknown", "Created Task", taskItem.Id);
+
             var response = new TaskItemResponseDto
             {
                 Id = taskItem.Id,
@@ -160,7 +164,7 @@ namespace SmartTaskAPI.Controllers
 
             return CreatedAtAction(nameof(GetById), new { id = taskItem.Id }, response);
         }
-        
+
         [HttpPut("{id}")]
         public async Task<ActionResult> Update(int id, TaskItemUpdateDto dto)
         {
@@ -190,13 +194,15 @@ namespace SmartTaskAPI.Controllers
                         .FirstOrDefaultAsync(t => t.Name.ToLower() == tagName.ToLower())
                         ?? new Tag { Name = tagName };
 
-
                     task.TaskItemTags.Add(new TaskItemTag { Tag = tag });
                 }
             }
 
             await _context.SaveChangesAsync();
-              var response = new TaskItemResponseDto
+
+            _activityLogger.Log(GetCurrentUserId(), User.Identity?.Name ?? "unknown", "Updated Task", task.Id);
+
+            var response = new TaskItemResponseDto
             {
                 Id = task.Id,
                 Title = task.Title,
@@ -217,8 +223,10 @@ namespace SmartTaskAPI.Controllers
             if (task == null || (!IsAdmin() && task.UserId != GetCurrentUserId()))
                 return NotFound();
 
-            task.IsDeleted = true; 
+            task.IsDeleted = true;
             await _context.SaveChangesAsync();
+
+            _activityLogger.Log(GetCurrentUserId(), User.Identity?.Name ?? "unknown", "Deleted Task", task.Id);
 
             return NoContent();
         }
@@ -249,7 +257,6 @@ namespace SmartTaskAPI.Controllers
             return Ok(tags);
         }
 
-
         [HttpGet("tags/stats")]
         public async Task<ActionResult> GetTagStats()
         {
@@ -279,7 +286,5 @@ namespace SmartTaskAPI.Controllers
 
             return Ok(stats);
         }
-
-
     }
 }
